@@ -1,8 +1,9 @@
 const crypto = require("crypto")
 
-const encryptionPassword = (passowrd) => {
+const encryptionPassword = (password) => {
     const sha256 = crypto.createHash("sha256")
-    return sha256.update(passowrd).digest("hex")
+    const result = sha256.update(String(password)).digest("hex")
+    return result
 }
 
 module.exports = {
