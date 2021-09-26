@@ -1,8 +1,9 @@
 const jwt = require("jsonwebtoken")
-const { PUBLIC_KEY } = require("../app/config")
 const errorType = require("../app/error_types")
 const userService = require("../service/user_service")
 const encryption = require("../utils/encryption")
+const authService = require("../service/auth_service")
+const { PUBLIC_KEY } = require("../app/config")
 
 const verifyLogin = async (ctx, next) => {
     const { name, password } = ctx.request.body
@@ -33,22 +34,49 @@ const verifyLogin = async (ctx, next) => {
 }
 
 const verifyAuth = async (ctx, next) => {
-    // 获取token
-    const authorization = ctx.headers.authorization
-    const token = authorization.replace("Bearer ", "")
     try {
+        // 获取token
+        const authorization = ctx.headers.authorization
+        const token = authorization.replace("Bearer ", "")
+
+        // 验证token
         const result = jwt.verify(token, PUBLIC_KEY, {
             algorithms: ["RS256"]
         })
-        ctx.user = result
-        await next()
+
+        if(!result){
+            const error = new Error(errorType.UNAUTHORIZATION)
+            ctx.app.emit("error", error, ctx)
+        }
+        else {
+            ctx.user = result
+            await next()
+        }
+
     } catch (err) {
-        const error = new Error(errorType.UNAUTHORIZATION)
-        ctx.app.emit("error", error, ctx)
+        if (err.sqlMessage) {
+            const error = new Error(errorType.DATABASE_ERROR)
+            ctx.app.emit("error", error, ctx)
+        }
+        else {
+            throw err
+        }
     }
+}
+
+const verifyPermission = async (ctx, next) => {
+    const { commentId } = ctx.params
+    const { id } = ctx.user
+    const isPermission = await authService.checkPermission(id, commentId)
+    if (!isPermission) {
+        const error = new Error(errorType.UNPERMISSION)
+        return ctx.app.emit("error", error, ctx)
+    }
+    await next()
 }
 
 module.exports = {
     verifyLogin,
     verifyAuth,
+    verifyPermission
 }
